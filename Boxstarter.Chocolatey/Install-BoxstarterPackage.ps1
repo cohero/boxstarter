@@ -59,9 +59,9 @@ This function wraps a Chocolatey Install and provides these additional features
 
  .PARAMETER BoxstarterConnectionConfig
  If provided, Boxstarter will install the specified package name on all computers
- included in the BoxstarterConnectionConfig. This object contains a ComputerName
- and a PSCredential. Use this object if you need to pass different computers
- requiring different credentials.
+ included in the BoxstarterConnectionConfig. This object contains a ConnectionURI
+ a PSCredential, and an optional PSSessionOption. Use this object if you need to
+ pass different computers requiring different credentials.
 
  .PARAMETER PackageName
  The names of one or more NuGet Packages to be installed or URIs or
@@ -94,6 +94,10 @@ directory but can be changed with Set-BoxstarterConfig.
 .PARAMETER DelegateChocoSources
 This enables remote Chocolatey installs to use the same NugetSources
 as the local Boxstarter install.
+
+.PARAMETER StopOnPackageFailure
+This will stop execution immediately after a Chocolatey package fails to
+install.
 
 .NOTES
 If specifying only one package, Boxstarter calls Chocolatey with the
@@ -224,8 +228,8 @@ proceeding to the other computers.
 .EXAMPLE
 $cred1=Get-Credential mwrock
 $cred2=Get-Credential domain\mwrock
-(New-Object -TypeName BoxstarterConnectionConfig -ArgumentList "computer1",$cred1), `
-(New-Object -TypeName BoxstarterConnectionConfig -ArgumentList "computer2",$cred2) |
+(New-Object -TypeName BoxstarterConnectionConfig -ArgumentList "http://computer1:5985/wsman",$cred1,$null), `
+(New-Object -TypeName BoxstarterConnectionConfig -ArgumentList "http://computer2:5985/wsman",$cred2,$null) |
 Install-BoxstarterPackage -Package MyPackage
 
 This installs the MyPackage package on computer1 and computer2 and uses
@@ -262,26 +266,39 @@ about_boxstarter_chocolatey
 	param(
         [parameter(Mandatory=$true, Position=0, ValueFromPipeline=$True, ParameterSetName="BoxstarterConnectionConfig")]
         [BoxstarterConnectionConfig[]]$BoxstarterConnectionConfig,
+
         [parameter(Mandatory=$true, Position=0, ValueFromPipeline=$True, ParameterSetName="ComputerName")]
         [string[]]$ComputerName,
+
         [parameter(Mandatory=$true, Position=0, ValueFromPipeline=$True, ParameterSetName="ConnectionUri")]
         [Uri[]]$ConnectionUri,
+
         [parameter(Mandatory=$true, Position=0, ValueFromPipeline=$True, ParameterSetName="Session")]
         [System.Management.Automation.Runspaces.PSSession[]]$Session,
+
         [parameter(Mandatory=$true, Position=0, ParameterSetName="Package")]
         [parameter(Mandatory=$true, Position=1, ParameterSetName="ComputerName")]
         [parameter(Mandatory=$true, Position=1, ParameterSetName="ConnectionUri")]
         [parameter(Mandatory=$true, Position=1, ParameterSetName="Session")]
         [parameter(Mandatory=$true, Position=1, ParameterSetName="BoxstarterConnectionConfig")]
         [string[]]$PackageName,
+
         [Management.Automation.PsCredential]$Credential,
+
         [switch]$Force,
+
         [switch]$DisableReboots,
+
         [parameter(ParameterSetName="Package")]
         [switch]$KeepWindowOpen,
+
         [string]$LocalRepo,
+
         [switch]$DisableRestart,
-        [switch]$DelegateChocoSources
+
+        [switch]$DelegateChocoSources,
+
+        [switch]$StopOnPackageFailure
     )
     $CurrentVerbosity=$global:VerbosePreference
     try {
@@ -519,12 +536,20 @@ function Install-BoxstarterPackageForSession($session, $PackageName, $DisableReb
 function Invoke-Locally {
     param(
         [string[]]$PackageName,
+
         [Management.Automation.PsCredential]$Credential,
+
         [switch]$Force,
+
         [switch]$DisableReboots,
+
         [switch]$KeepWindowOpen,
+
         [switch]$DisableRestart,
-        [string]$LocalRepo
+
+        [string]$LocalRepo,
+
+        [switch]$StopOnPackageFailure
     )
     if($PSBoundParameters.ContainsKey("Credential")){
         if($Credential -ne $null) {
